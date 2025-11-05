@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import matplotlib.pyplot as plt
 import math
 
 # --- ENVIRONMENT SETUP ---
@@ -115,6 +116,11 @@ def update_q_table(state_index, action, reward, next_state_index):
 # --- THE TRAINING LOOP ---
 print("Starting Q-Learning Training...")
 
+# Convergence Tracking Variables
+convergence_data = []
+max_coverage_found = -1
+CHECK_INTERVAL = 100
+
 for episode in range(num_episodes):
     # 1. Get initial state
     current_state = get_random_state()
@@ -133,8 +139,15 @@ for episode in range(num_episodes):
     # 5. Update Q-Table (LEARN!)
     update_q_table(s, a, r, s_prime)
 
-    if (episode + 1) % 1000 == 0:
-        print(f"Completed Episode {episode + 1}")
+
+    # Convergence Tracking
+    if r > max_coverage_found:
+        max_coverage_found = r
+
+    if (episode + 1) % CHECK_INTERVAL == 0:
+        # Record the best coverage found up to this point
+        convergence_data.append(max_coverage_found)
+        print(f"Episode {episode + 1}: Max Coverage Found So Far = {max_coverage_found}")
 
 # --- FINDING THE OPTIMAL SOLUTION ---
 print("\nTraining complete. Finding optimal positions...")
@@ -155,3 +168,19 @@ print(f"Total Dots Available: {len(DOT_DISTRIBUTION)}")
 print(f"Maximum Dots Covered: {max_coverage}")
 print(f"Optimal Position for Disk 1 (x, y): {optimal_state[0]}")
 print(f"Optimal Position for Disk 2 (x, y): {optimal_state[1]}")
+
+
+print("\nPlotting convergence curve...")
+
+# Create the x-axis values (which are the episode numbers at each check point)
+x_axis = [i * CHECK_INTERVAL for i in range(1, len(convergence_data) + 1)]
+
+plt.figure(figsize=(10, 6))
+plt.plot(x_axis, convergence_data, marker='.', linestyle='-', color='b')
+plt.title('Q-Learning Convergence Curve: Maximum Dot Coverage')
+plt.xlabel('Training Episodes')
+plt.ylabel('Max Dot Coverage Found')
+plt.grid(True)
+plt.axhline(y=max_coverage_found, color='r', linestyle='--', label=f'Final Max Coverage ({max_coverage_found})')
+plt.legend()
+plt.show()
