@@ -66,12 +66,9 @@ for x1 in coordinates:
 Q = np.zeros((len(states), len(ACTIONS)))
 state_to_index = {state: idx for idx, state in enumerate(states)}
 
-# --- NEW FUNCTION ---
 def reset_environment():
     """Resets the environment by placing the disks at a random starting state."""
     return get_random_state()
-# --------------------
-
 
 def get_next_state(state, action):
     (disk, direction) = ACTIONS[action]
@@ -102,7 +99,6 @@ def get_next_state(state, action):
         return ((x1, y1), (nx2, ny2))
 
 def choose_action(state_index):
-    # Epsilon is a global variable, so no need to pass it
     if random.uniform(0, 1) < epsilon:
         return random.choice(list(ACTIONS.keys()))
     else:
@@ -143,9 +139,6 @@ for episode in range(num_episodes):
         # 5. Transition to the new state
         current_state = new_state
         s = s_prime
-
-        # Termination condition (optional: if goal is reached, break)
-        # In this problem, we continue for MAX_STEPS_PER_EPISODE
 
         # Convergence Tracking: Update the maximum coverage found
         if r > max_coverage_found:
@@ -191,3 +184,53 @@ plt.grid(True)
 plt.axhline(y=max_coverage_found, color='r', linestyle='--', label=f'Final Max Coverage ({max_coverage_found})')
 plt.legend()
 plt.show()
+
+# --- NEW PLOTTING FUNCTION FOR DISK COVERAGE ---
+def plot_disk_coverage(optimal_state, radius, dot_distribution, grid_size):
+    (x1, y1), (x2, y2) = optimal_state
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    # Plot all dots
+    dot_xs = [d[0] for d in dot_distribution]
+    dot_ys = [d[1] for d in dot_distribution]
+    ax.scatter(dot_xs, dot_ys, color='gray', s=50, zorder=2, label='All Dots')
+
+    # Plot Disk 1
+    circle1 = plt.Circle((x1, y1), radius, color='red', alpha=0.3, label='Disk 1 Coverage')
+    ax.add_patch(circle1)
+    ax.scatter(x1, y1, color='red', marker='X', s=200, zorder=3, label='Disk 1 Center')
+
+    # Plot Disk 2
+    circle2 = plt.Circle((x2, y2), radius, color='blue', alpha=0.3, label='Disk 2 Coverage')
+    ax.add_patch(circle2)
+    ax.scatter(x2, y2, color='blue', marker='X', s=200, zorder=3, label='Disk 2 Center')
+
+    # Identify and plot covered dots
+    covered_dot_indices = set()
+    for i, (dx, dy) in enumerate(dot_distribution):
+        if (dx - x1)**2 + (dy - y1)**2 <= radius**2 or \
+           (dx - x2)**2 + (dy - y2)**2 <= radius**2:
+            covered_dot_indices.add(i)
+    
+    covered_xs = [dot_distribution[i][0] for i in covered_dot_indices]
+    covered_ys = [dot_distribution[i][1] for i in covered_dot_indices]
+    ax.scatter(covered_xs, covered_ys, color='green', s=100, zorder=4, label='Covered Dots')
+
+
+    ax.set_xlim(-0.5, grid_size + 0.5)
+    ax.set_ylim(-0.5, grid_size + 0.5)
+    ax.set_xticks(np.arange(0, grid_size + 1, 1))
+    ax.set_yticks(np.arange(0, grid_size + 1, 1))
+    ax.grid(True, linestyle='--', alpha=0.7)
+    ax.set_title(f'Optimal Disk Coverage (Total Covered: {len(covered_dot_indices)})')
+    ax.set_xlabel('X-coordinate')
+    ax.set_ylabel('Y-coordinate')
+    ax.set_aspect('equal', adjustable='box')
+    ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    plt.tight_layout()
+    plt.show()
+
+# --- CALL THE NEW PLOTTING FUNCTION ---
+print("\nPlotting optimal disk coverage...")
+plot_disk_coverage(optimal_state, radius, DOT_DISTRIBUTION, grid)
