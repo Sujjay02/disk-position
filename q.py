@@ -37,6 +37,7 @@ def get_reward(state):
         if distance_sq_2 <= radius**2:
             covered_dots.add(i)
             
+    # The reward is the number of dots covered
     return len(covered_dots)
 
 def get_random_state():
@@ -50,8 +51,9 @@ def get_random_state():
 # --- Q-LEARNING PARAMETERS ---
 alpha = 0.1  # Learning rate
 gamma = 0.9  # Discount factor
-epsilon = 0.2  # Exploration rate (global variable)
+epsilon = 0.2  # Exploration rate
 num_episodes = 10000
+MAX_STEPS_PER_EPISODE = 20 # New parameter: Define the length of an episode
 
 # Generate all possible states (625 states)
 states=[]
@@ -63,6 +65,12 @@ for x1 in coordinates:
 
 Q = np.zeros((len(states), len(ACTIONS)))
 state_to_index = {state: idx for idx, state in enumerate(states)}
+
+# --- NEW FUNCTION ---
+def reset_environment():
+    """Resets the environment by placing the disks at a random starting state."""
+    return get_random_state()
+# --------------------
 
 
 def get_next_state(state, action):
@@ -101,20 +109,13 @@ def choose_action(state_index):
         return np.argmax(Q[state_index]) # Exploit
 
 def update_q_table(state_index, action, reward, next_state_index):
-    # Use the passed arguments, not local variables s and a from the loop
     old_q = Q[state_index, action]
-    
-    # Find the maximum Q-value for the new state (s_prime)
     max_future_q = np.max(Q[next_state_index, :])
-    
-    # The new Q-value: (1-alpha)*old_q + alpha * [reward + gamma*max_future_q]
     new_q = (1 - alpha) * old_q + alpha * (reward + gamma * max_future_q)
-    
-    # Update the table
     Q[state_index, action] = new_q
 
-# --- THE TRAINING LOOP ---
-print("Starting Q-Learning Training...")
+# --- THE TYPICAL EPISODIC TRAINING LOOP ---
+print("Starting Q-Learning Training (Episodic Format)...")
 
 # Convergence Tracking Variables
 convergence_data = []
@@ -122,30 +123,36 @@ max_coverage_found = -1
 CHECK_INTERVAL = 100
 
 for episode in range(num_episodes):
-    # 1. Get initial state
-    current_state = get_random_state()
+    # 1. Start of Episode: Reset to a random initial state
+    current_state = reset_environment()
     s = state_to_index[current_state]
     
-    # 2. Choose action (passing only one argument now)
-    a = choose_action(s)
-    
-    # 3. Take action to get new state (s_prime) (FIXED LINE)
-    new_state = get_next_state(current_state, a)
-    s_prime = state_to_index[new_state] # FIXED VARIABLE
-    
-    # 4. Get Reward
-    r = get_reward(new_state) # Reward based on the new state
-    
-    # 5. Update Q-Table (LEARN!)
-    update_q_table(s, a, r, s_prime)
+    for step in range(MAX_STEPS_PER_EPISODE):
+        
+        # 2. Choose action (A)
+        a = choose_action(s)
+        
+        # 3. Take action, observe reward (R) and new state (S')
+        new_state = get_next_state(current_state, a)
+        s_prime = state_to_index[new_state]
+        r = get_reward(new_state)
+        
+        # 4. Update Q-Table (LEARN!)
+        update_q_table(s, a, r, s_prime)
 
+        # 5. Transition to the new state
+        current_state = new_state
+        s = s_prime
 
-    # Convergence Tracking
-    if r > max_coverage_found:
-        max_coverage_found = r
+        # Termination condition (optional: if goal is reached, break)
+        # In this problem, we continue for MAX_STEPS_PER_EPISODE
 
+        # Convergence Tracking: Update the maximum coverage found
+        if r > max_coverage_found:
+            max_coverage_found = r
+
+    # Convergence Tracking (at the end of each episode)
     if (episode + 1) % CHECK_INTERVAL == 0:
-        # Record the best coverage found up to this point
         convergence_data.append(max_coverage_found)
         print(f"Episode {episode + 1}: Max Coverage Found So Far = {max_coverage_found}")
 
@@ -155,7 +162,7 @@ print("\nTraining complete. Finding optimal positions...")
 max_coverage = -1
 optimal_state = None
 
-# Iterate over all possible states (FIXED VARIABLE)
+# Iterate over all possible states (to ensure the true maximum is found)
 for state in states:
     coverage = get_reward(state)
     
@@ -177,7 +184,7 @@ x_axis = [i * CHECK_INTERVAL for i in range(1, len(convergence_data) + 1)]
 
 plt.figure(figsize=(10, 6))
 plt.plot(x_axis, convergence_data, marker='.', linestyle='-', color='b')
-plt.title('Q-Learning Convergence Curve: Maximum Dot Coverage')
+plt.title('Q-Learning Convergence Curve: Maximum Dot Coverage (Episodic)')
 plt.xlabel('Training Episodes')
 plt.ylabel('Max Dot Coverage Found')
 plt.grid(True)
