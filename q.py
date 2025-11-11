@@ -37,7 +37,7 @@ def get_reward(state):
         if distance_sq_2 <= radius**2:
             covered_dots.add(i)
             
-    # The reward is the number of dots covered
+    # The reward is the number of unique dots covered
     return len(covered_dots)
 
 def get_random_state():
@@ -53,7 +53,7 @@ alpha = 0.1  # Learning rate
 gamma = 0.9  # Discount factor
 epsilon = 0.2  # Exploration rate
 num_episodes = 10000
-MAX_STEPS_PER_EPISODE = 20 # New parameter: Define the length of an episode
+MAX_STEPS_PER_EPISODE = 20 # Define the length of an episode
 
 # Generate all possible states (625 states)
 states=[]
@@ -74,7 +74,6 @@ def get_next_state(state, action):
     (disk, direction) = ACTIONS[action]
     (x1, y1), (x2, y2) = state
     
-    # Create mutable copies for the new position
     nx1, ny1, nx2, ny2 = x1, y1, x2, y2
 
     if disk == 'disk1':
@@ -115,10 +114,8 @@ print("Starting Q-Learning Training (Episodic Format)...")
 
 # Convergence Tracking Variables
 convergence_data = []
-# Renaming this for clarity: tracks the max *instantaneous* coverage found
-max_instantaneous_coverage_found = -1 
-# NEW: Tracks the maximum *accumulated* reward (Return) found across all episodes
-max_episode_return_found = -float('inf') 
+max_instantaneous_coverage_found = -1 # Tracks max step reward found
+max_episode_return_found = -float('inf') # Tracks max accumulated reward found
 CHECK_INTERVAL = 100
 
 for episode in range(num_episodes):
@@ -126,8 +123,7 @@ for episode in range(num_episodes):
     current_state = reset_environment()
     s = state_to_index[current_state]
     
-    # NEW: Initialize the total reward for this specific episode
-    episode_return = 0
+    episode_return = 0 # Initialize the total reward for this specific episode
     
     for step in range(MAX_STEPS_PER_EPISODE):
         
@@ -139,7 +135,7 @@ for episode in range(num_episodes):
         s_prime = state_to_index[new_state]
         r = get_reward(new_state) # Step-wise reward
         
-        # NEW: Accumulate the step-wise reward to get the episode return
+        # Accumulate the step-wise reward to get the episode return
         episode_return += r
         
         # 4. Update Q-Table (LEARN!)
@@ -149,7 +145,7 @@ for episode in range(num_episodes):
         current_state = new_state
         s = s_prime
 
-        # Tracking instantaneous max (for general performance monitoring)
+        # Tracking instantaneous max
         if r > max_instantaneous_coverage_found:
             max_instantaneous_coverage_found = r
 
@@ -162,6 +158,7 @@ for episode in range(num_episodes):
         # We track the highest *accumulated return* for the convergence plot
         convergence_data.append(max_episode_return_found)
         print(f"Episode {episode + 1}: Max Instantaneous Coverage = {max_instantaneous_coverage_found}, Max Accumulated Return = {max_episode_return_found}")
+
 # --- FINDING THE OPTIMAL SOLUTION ---
 print("\nTraining complete. Finding optimal positions...")
 
@@ -190,11 +187,12 @@ x_axis = [i * CHECK_INTERVAL for i in range(1, len(convergence_data) + 1)]
 
 plt.figure(figsize=(10, 6))
 plt.plot(x_axis, convergence_data, marker='.', linestyle='-', color='b')
-plt.title('Q-Learning Convergence Curve: Maximum Dot Coverage (Episodic)')
+plt.title('Q-Learning Convergence Curve: Maximum Accumulated Episode Return')
 plt.xlabel('Training Episodes')
-plt.ylabel('Max Dot Coverage Found')
+plt.ylabel('Max Accumulated Return Found')
 plt.grid(True)
-plt.axhline(y=max_coverage_found, color='r', linestyle='--', label=f'Final Max Coverage ({max_coverage_found})')
+# FIXED: Using max_episode_return_found since the plot tracks the accumulated return
+plt.axhline(y=max_episode_return_found, color='r', linestyle='--', label=f'Final Max Return ({max_episode_return_found})') 
 plt.legend()
 plt.show()
 
@@ -210,12 +208,12 @@ def plot_disk_coverage(optimal_state, radius, dot_distribution, grid_size):
     ax.scatter(dot_xs, dot_ys, color='gray', s=50, zorder=2, label='All Dots')
 
     # Plot Disk 1
-    circle1 = plt.Circle((x1, y1), radius, color='red', alpha=0.3, label='Disk 1 Coverage')
+    circle1 = plt.Circle((x1, y1), radius, color='red', alpha=0.3, label=f'Disk 1 Coverage ({x1}, {y1})')
     ax.add_patch(circle1)
     ax.scatter(x1, y1, color='red', marker='X', s=200, zorder=3, label='Disk 1 Center')
 
     # Plot Disk 2
-    circle2 = plt.Circle((x2, y2), radius, color='blue', alpha=0.3, label='Disk 2 Coverage')
+    circle2 = plt.Circle((x2, y2), radius, color='blue', alpha=0.3, label=f'Disk 2 Coverage ({x2}, {y2})')
     ax.add_patch(circle2)
     ax.scatter(x2, y2, color='blue', marker='X', s=200, zorder=3, label='Disk 2 Center')
 
