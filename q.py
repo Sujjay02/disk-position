@@ -115,13 +115,19 @@ print("Starting Q-Learning Training (Episodic Format)...")
 
 # Convergence Tracking Variables
 convergence_data = []
-max_coverage_found = -1
+# Renaming this for clarity: tracks the max *instantaneous* coverage found
+max_instantaneous_coverage_found = -1 
+# NEW: Tracks the maximum *accumulated* reward (Return) found across all episodes
+max_episode_return_found = -float('inf') 
 CHECK_INTERVAL = 100
 
 for episode in range(num_episodes):
-    # 1. Start of Episode: Reset to a random initial state
+    # 1. Start of Episode: Reset to a random initial state and reset the episode return
     current_state = reset_environment()
     s = state_to_index[current_state]
+    
+    # NEW: Initialize the total reward for this specific episode
+    episode_return = 0
     
     for step in range(MAX_STEPS_PER_EPISODE):
         
@@ -131,7 +137,10 @@ for episode in range(num_episodes):
         # 3. Take action, observe reward (R) and new state (S')
         new_state = get_next_state(current_state, a)
         s_prime = state_to_index[new_state]
-        r = get_reward(new_state)
+        r = get_reward(new_state) # Step-wise reward
+        
+        # NEW: Accumulate the step-wise reward to get the episode return
+        episode_return += r
         
         # 4. Update Q-Table (LEARN!)
         update_q_table(s, a, r, s_prime)
@@ -140,15 +149,19 @@ for episode in range(num_episodes):
         current_state = new_state
         s = s_prime
 
-        # Convergence Tracking: Update the maximum coverage found
-        if r > max_coverage_found:
-            max_coverage_found = r
+        # Tracking instantaneous max (for general performance monitoring)
+        if r > max_instantaneous_coverage_found:
+            max_instantaneous_coverage_found = r
+
+    # END OF EPISODE: Check the total accumulated reward (Return)
+    if episode_return > max_episode_return_found:
+        max_episode_return_found = episode_return
 
     # Convergence Tracking (at the end of each episode)
     if (episode + 1) % CHECK_INTERVAL == 0:
-        convergence_data.append(max_coverage_found)
-        print(f"Episode {episode + 1}: Max Coverage Found So Far = {max_coverage_found}")
-
+        # We track the highest *accumulated return* for the convergence plot
+        convergence_data.append(max_episode_return_found)
+        print(f"Episode {episode + 1}: Max Instantaneous Coverage = {max_instantaneous_coverage_found}, Max Accumulated Return = {max_episode_return_found}")
 # --- FINDING THE OPTIMAL SOLUTION ---
 print("\nTraining complete. Finding optimal positions...")
 
