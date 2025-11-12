@@ -5,12 +5,26 @@ import math
 
 # --- ENVIRONMENT SETUP ---
 grid = 4
-coordinates = [0, 1, 2, 3, 4]
+coordinates = [0, 1, 2, 3, 4] # Grid coordinates from 0 to 4
 radius = 1.2
-ACTIONS = {
-    0: ('disk1', 'N'), 1: ('disk1', 'S'), 2: ('disk1', 'E'), 3: ('disk1', 'W'),
-    4: ('disk2', 'N'), 5: ('disk2', 'S'), 6: ('disk2', 'E'), 7: ('disk2', 'W')
+
+# Single disk movement options: (dx, dy)
+MOVES = {
+    0: (0, 0),  # Stay
+    1: (0, 1),  # North
+    2: (0, -1), # South
+    3: (1, 0),  # East
+    4: (-1, 0)  # West
 }
+
+# Generate 5x5 = 25 simultaneous actions: ((d1_dx, d1_dy), (d2_dx, d2_dy))
+ACTIONS = {}
+action_index = 0
+for d1_move_idx in MOVES:
+    for d2_move_idx in MOVES:
+        # Action maps index to ((Disk 1 move vector), (Disk 2 move vector))
+        ACTIONS[action_index] = (MOVES[d1_move_idx], MOVES[d2_move_idx])
+        action_index += 1
 
 DOT_DISTRIBUTION = [
     (1.73, 2.91), (1.33, 2.80), (1.25, 0.83), (2.59, 2.91),
@@ -24,7 +38,7 @@ DOT_DISTRIBUTION = [
 
 def get_reward(state):
     (x1, y1), (x2, y2) = state
-    covered_dots = set()
+    covered_dots = set() # Use a set to avoid double counting
 
     for i, (dx, dy) in enumerate(DOT_DISTRIBUTION):
         # Disk 1 check
@@ -37,7 +51,6 @@ def get_reward(state):
         if distance_sq_2 <= radius**2:
             covered_dots.add(i)
             
-    # The reward is the number of unique dots covered
     return len(covered_dots)
 
 def get_random_state():
@@ -45,17 +58,16 @@ def get_random_state():
     y1 = random.choice(coordinates)
     x2 = random.choice(coordinates)
     y2 = random.choice(coordinates)
-    return ((x1, y1), (x2, y2))
-
+    return ((int(x1), int(y1)), (int(x2), int(y2)))
 
 # --- Q-LEARNING PARAMETERS ---
 alpha = 0.1  # Learning rate
 gamma = 0.9  # Discount factor
 epsilon = 0.2  # Exploration rate
 num_episodes = 10000
-MAX_STEPS_PER_EPISODE = 20 # Define the length of an episode
+MAX_STEPS_PER_EPISODE = 20 
 
-# Generate all possible states (625 states)
+# Generate all possible states (5^4 = 625 states)
 states=[]
 for x1 in coordinates:
     for y1 in coordinates:
@@ -63,6 +75,7 @@ for x1 in coordinates:
             for y2 in coordinates:
                 states.append( ((x1,y1),(x2,y2)) )
 
+# Q-table initialization: (625 states x 25 actions)
 Q = np.zeros((len(states), len(ACTIONS)))
 state_to_index = {state: idx for idx, state in enumerate(states)}
 
@@ -71,31 +84,21 @@ def reset_environment():
     return get_random_state()
 
 def get_next_state(state, action):
-    (disk, direction) = ACTIONS[action]
+    # Action = ((d1_dx, d1_dy), (d2_dx, d2_dy))
+    (d1_move), (d2_move) = ACTIONS[action]
     (x1, y1), (x2, y2) = state
+    grid_max = grid # grid is 4
     
-    nx1, ny1, nx2, ny2 = x1, y1, x2, y2
+    # Calculate new position for Disk 1 and ensure it's within bounds [0, 4]
+    nx1 = np.clip(x1 + d1_move[0], 0, grid_max)
+    ny1 = np.clip(y1 + d1_move[1], 0, grid_max)
 
-    if disk == 'disk1':
-        if direction == 'N':
-            ny1 = min(grid, y1 + 1)
-        elif direction == 'S':
-            ny1 = max(0, y1 - 1)
-        elif direction == 'E':
-            nx1 = min(grid, x1 + 1)
-        elif direction == 'W':
-            nx1 = max(0, x1 - 1)
-        return ((nx1, ny1), (x2, y2))
-    else:  # disk2
-        if direction == 'N':
-            ny2 = min(grid, y2 + 1)
-        elif direction == 'S':
-            ny2 = max(0, y2 - 1)
-        elif direction == 'E':
-            nx2 = min(grid, x2 + 1)
-        elif direction == 'W':
-            nx2 = max(0, x2 - 1)
-        return ((x1, y1), (nx2, ny2))
+    # Calculate new position for Disk 2 and ensure it's within bounds [0, 4]
+    nx2 = np.clip(x2 + d2_move[0], 0, grid_max)
+    ny2 = np.clip(y2 + d2_move[1], 0, grid_max)
+
+    # Return the new state (positions must be integers as per coordinate definition)
+    return ((int(nx1), int(ny1)), (int(nx2), int(ny2)))
 
 def choose_action(state_index):
     if random.uniform(0, 1) < epsilon:
@@ -106,46 +109,40 @@ def choose_action(state_index):
 def update_q_table(state_index, action, reward, next_state_index):
     old_q = Q[state_index, action]
     max_future_q = np.max(Q[next_state_index, :])
+    
+    # Q-Learning update rule
     new_q = (1 - alpha) * old_q + alpha * (reward + gamma * max_future_q)
     Q[state_index, action] = new_q
 
-# --- THE TYPICAL EPISODIC TRAINING LOOP ---
-print("Starting Q-Learning Training (Episodic Format)...")
+# --- THE EPISODIC TRAINING LOOP ---
+print("Starting Q-Learning Training (25 Actions)...")
 
-# Convergence Tracking Variables
 convergence_data = []
-max_instantaneous_coverage_found = -1 # Tracks max step reward found
-max_episode_return_found = -float('inf') # Tracks max accumulated reward found
+max_instantaneous_coverage_found = -1 
+max_episode_return_found = -float('inf') 
 CHECK_INTERVAL = 100
 
 for episode in range(num_episodes):
-    # 1. Start of Episode: Reset to a random initial state and reset the episode return
     current_state = reset_environment()
     s = state_to_index[current_state]
     
-    episode_return = 0 # Initialize the total reward for this specific episode
+    episode_return = 0
     
     for step in range(MAX_STEPS_PER_EPISODE):
         
-        # 2. Choose action (A)
         a = choose_action(s)
         
-        # 3. Take action, observe reward (R) and new state (S')
         new_state = get_next_state(current_state, a)
         s_prime = state_to_index[new_state]
         r = get_reward(new_state) # Step-wise reward
         
-        # Accumulate the step-wise reward to get the episode return
-        episode_return += r
+        episode_return += r # Accumulate step-wise reward
         
-        # 4. Update Q-Table (LEARN!)
         update_q_table(s, a, r, s_prime)
 
-        # 5. Transition to the new state
         current_state = new_state
         s = s_prime
 
-        # Tracking instantaneous max
         if r > max_instantaneous_coverage_found:
             max_instantaneous_coverage_found = r
 
@@ -153,19 +150,17 @@ for episode in range(num_episodes):
     if episode_return > max_episode_return_found:
         max_episode_return_found = episode_return
 
-    # Convergence Tracking (at the end of each episode)
     if (episode + 1) % CHECK_INTERVAL == 0:
-        # We track the highest *accumulated return* for the convergence plot
         convergence_data.append(max_episode_return_found)
         print(f"Episode {episode + 1}: Max Instantaneous Coverage = {max_instantaneous_coverage_found}, Max Accumulated Return = {max_episode_return_found}")
 
-# --- FINDING THE OPTIMAL SOLUTION ---
+# --- FINDING THE OPTIMAL SOLUTION (Global Check) ---
 print("\nTraining complete. Finding optimal positions...")
 
 max_coverage = -1
 optimal_state = None
 
-# Iterate over all possible states (to ensure the true maximum is found)
+# Iterate over all possible states to find the true global maximum coverage
 for state in states:
     coverage = get_reward(state)
     
@@ -175,47 +170,44 @@ for state in states:
 
 print("\n--- RESULTS ---")
 print(f"Total Dots Available: {len(DOT_DISTRIBUTION)}")
-print(f"Maximum Dots Covered: {max_coverage}")
+print(f"Maximum Dots Covered (Global Max): {max_coverage}")
 print(f"Optimal Position for Disk 1 (x, y): {optimal_state[0]}")
 print(f"Optimal Position for Disk 2 (x, y): {optimal_state[1]}")
 
-
+# --- CONVERGENCE PLOT ---
 print("\nPlotting convergence curve...")
-
-# Create the x-axis values (which are the episode numbers at each check point)
 x_axis = [i * CHECK_INTERVAL for i in range(1, len(convergence_data) + 1)]
 
 plt.figure(figsize=(10, 6))
 plt.plot(x_axis, convergence_data, marker='.', linestyle='-', color='b')
-plt.title('Q-Learning Convergence Curve: Maximum Accumulated Episode Return')
+plt.title('Q-Learning Convergence Curve: Maximum Accumulated Episode Return (25 Actions)')
 plt.xlabel('Training Episodes')
 plt.ylabel('Max Accumulated Return Found')
 plt.grid(True)
-# FIXED: Using max_episode_return_found since the plot tracks the accumulated return
+# Corrected axhline to use max_episode_return_found
 plt.axhline(y=max_episode_return_found, color='r', linestyle='--', label=f'Final Max Return ({max_episode_return_found})') 
 plt.legend()
 plt.show()
 
-# --- NEW PLOTTING FUNCTION FOR DISK COVERAGE ---
+# --- OPTIMAL DISK COVERAGE PLOT ---
 def plot_disk_coverage(optimal_state, radius, dot_distribution, grid_size):
     (x1, y1), (x2, y2) = optimal_state
 
     fig, ax = plt.subplots(figsize=(8, 8))
 
-    # Plot all dots
     dot_xs = [d[0] for d in dot_distribution]
     dot_ys = [d[1] for d in dot_distribution]
     ax.scatter(dot_xs, dot_ys, color='gray', s=50, zorder=2, label='All Dots')
 
     # Plot Disk 1
-    circle1 = plt.Circle((x1, y1), radius, color='red', alpha=0.3, label=f'Disk 1 Coverage ({x1}, {y1})')
+    circle1 = plt.Circle((x1, y1), radius, color='red', alpha=0.3, label=f'Disk 1 Coverage')
     ax.add_patch(circle1)
-    ax.scatter(x1, y1, color='red', marker='X', s=200, zorder=3, label='Disk 1 Center')
+    ax.scatter(x1, y1, color='red', marker='X', s=200, zorder=3, label=f'Disk 1 ({x1}, {y1})')
 
     # Plot Disk 2
-    circle2 = plt.Circle((x2, y2), radius, color='blue', alpha=0.3, label=f'Disk 2 Coverage ({x2}, {y2})')
+    circle2 = plt.Circle((x2, y2), radius, color='blue', alpha=0.3, label=f'Disk 2 Coverage')
     ax.add_patch(circle2)
-    ax.scatter(x2, y2, color='blue', marker='X', s=200, zorder=3, label='Disk 2 Center')
+    ax.scatter(x2, y2, color='blue', marker='X', s=200, zorder=3, label=f'Disk 2 ({x2}, {y2})')
 
     # Identify and plot covered dots
     covered_dot_indices = set()
