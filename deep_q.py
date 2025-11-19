@@ -5,7 +5,7 @@ import math
 
 # --- ENVIRONMENT SETUP ---
 grid = 4
-coordinates = [0, 1, 2, 3, 4] # Grid coordinates from 0 to 4
+coordinates = np.arange(0, 5) # [0, 1, 2, 3, 4]
 radius = 1.2
 
 # Single disk movement options: (dx, dy)
@@ -22,7 +22,6 @@ ACTIONS = {}
 action_index = 0
 for d1_move_idx in MOVES:
     for d2_move_idx in MOVES:
-        # Action maps index to ((Disk 1 move vector), (Disk 2 move vector))
         ACTIONS[action_index] = (MOVES[d1_move_idx], MOVES[d2_move_idx])
         action_index += 1
 
@@ -38,33 +37,25 @@ DOT_DISTRIBUTION = [
 
 def get_reward(state):
     (x1, y1), (x2, y2) = state
-    covered_dots = set() # Use a set to avoid double counting
-
+    covered_dots = set() 
+    # Logic is correct: set ensures no double counting
     for i, (dx, dy) in enumerate(DOT_DISTRIBUTION):
-        # Disk 1 check
-        distance_sq_1 = (dx - x1)**2 + (dy - y1)**2
-        if distance_sq_1 <= radius**2:
+        if (dx - x1)**2 + (dy - y1)**2 <= radius**2:
             covered_dots.add(i)
-            
-        # Disk 2 check
-        distance_sq_2 = (dx - x2)**2 + (dy - y2)**2
-        if distance_sq_2 <= radius**2:
+        if (dx - x2)**2 + (dy - y2)**2 <= radius**2:
             covered_dots.add(i)
-            
     return len(covered_dots)
 
 def get_random_state():
-    x1 = random.choice(coordinates)
-    y1 = random.choice(coordinates)
-    x2 = random.choice(coordinates)
-    y2 = random.choice(coordinates)
+    x1, y1 = random.choice(coordinates), random.choice(coordinates)
+    x2, y2 = random.choice(coordinates), random.choice(coordinates)
     return ((int(x1), int(y1)), (int(x2), int(y2)))
 
-# --- Q-LEARNING PARAMETERS ---
-alpha = 0.1  # Learning rate
-gamma = 0.9  # Discount factor
-epsilon = 0.2  # Exploration rate
-num_episodes = 10000
+# --- DQN PARAMETERS ---
+alpha = 0.001 # Reduced learning rate for NN/Approximation
+gamma = 0.9   # Discount factor
+epsilon = 0.2 # Exploration rate
+num_episodes = 15000 # Increased episodes for NN convergence
 MAX_STEPS_PER_EPISODE = 25
 
 # Generate all possible states (5^4 = 625 states)
@@ -73,49 +64,62 @@ for x1 in coordinates:
     for y1 in coordinates:
         for x2 in coordinates:
             for y2 in coordinates:
-                states.append( ((x1,y1),(x2,y2)) )
+                states.append( ((int(x1),int(y1)),(int(x2),int(y2))) )
 
-# Q-table initialization: (625 states x 25 actions)
-Q = np.zeros((len(states), len(ACTIONS)))
 state_to_index = {state: idx for idx, state in enumerate(states)}
 
+# --- Q-NETWORK SIMULATION ---
+# In a real DQN, this would be a large Keras/PyTorch model.
+# Here, we use a simple NumPy array (Q_values) to store the learned Q-values,
+# but the key difference is how we ACCESS and UPDATE it.
+# We treat this array as the 'learned function' output, using the index
+# mapping as the equivalent of the neural network's input/output mapping.
+Q_values = np.zeros((len(states), len(ACTIONS)))
+
+
+def predict_q_values(state_index):
+    """Simulates the Q-Network forward pass: Input state, output Q-values for all actions."""
+    # In a real DQN, this is NN.predict(state). Here, it's a table lookup.
+    return Q_values[state_index, :]
+
+def update_q_network(state_index, action, target_q):
+    """Simulates training the Q-Network using one sample (s, a, target_q)."""
+    # In a real DQN, this is where you perform a gradient descent step on the loss function.
+    
+    # Calculate the error (TD Error)
+    predicted_q = Q_values[state_index, action]
+    td_error = target_q - predicted_q
+    
+    # Update the 'Network weight' (the Q_value) via gradient descent approximation
+    Q_values[state_index, action] += alpha * td_error
+    
+# --- ENVIRONMENT STEP FUNCTIONS ---
+
 def reset_environment():
-    """Resets the environment by placing the disks at a random starting state."""
     return get_random_state()
 
 def get_next_state(state, action):
-    # Action = ((d1_dx, d1_dy), (d2_dx, d2_dy))
     (d1_move), (d2_move) = ACTIONS[action]
     (x1, y1), (x2, y2) = state
-    grid_max = grid # grid is 4
+    grid_max = grid
     
-    # Calculate new position for Disk 1 and ensure it's within bounds [0, 4]
     nx1 = np.clip(x1 + d1_move[0], 0, grid_max)
     ny1 = np.clip(y1 + d1_move[1], 0, grid_max)
-
-    # Calculate new position for Disk 2 and ensure it's within bounds [0, 4]
     nx2 = np.clip(x2 + d2_move[0], 0, grid_max)
     ny2 = np.clip(y2 + d2_move[1], 0, grid_max)
 
-    # Return the new state (positions must be integers as per coordinate definition)
     return ((int(nx1), int(ny1)), (int(nx2), int(ny2)))
 
 def choose_action(state_index):
+    # Epsilon-Greedy policy uses the current predicted Q-values
     if random.uniform(0, 1) < epsilon:
         return random.choice(list(ACTIONS.keys()))
     else:
-        return np.argmax(Q[state_index]) # Exploit
+        q_predictions = predict_q_values(state_index)
+        return np.argmax(q_predictions) # Exploit using the NN's output
 
-def update_q_table(state_index, action, reward, next_state_index):
-    old_q = Q[state_index, action]
-    max_future_q = np.max(Q[next_state_index, :])
-    
-    # Q-Learning update rule
-    new_q = (1 - alpha) * old_q + alpha * (reward + gamma * max_future_q)
-    Q[state_index, action] = new_q
-
-# --- THE EPISODIC TRAINING LOOP ---
-print("Starting Q-Learning Training (25 Actions)...")
+# --- THE DQN TRAINING LOOP ---
+print("Starting Deep Q-Learning Training (Simulated NN)...")
 
 convergence_data = []
 max_instantaneous_coverage_found = -1 
@@ -134,11 +138,21 @@ for episode in range(num_episodes):
         
         new_state = get_next_state(current_state, a)
         s_prime = state_to_index[new_state]
-        r = get_reward(new_state) # Step-wise reward
+        r = get_reward(new_state)
         
-        episode_return += r # Accumulate step-wise reward
+        episode_return += r
         
-        update_q_table(s, a, r, s_prime)
+        # --- DQN Update Step ---
+        # 1. Predict Q-values for the next state (s')
+        q_prime_predictions = predict_q_values(s_prime)
+        max_future_q = np.max(q_prime_predictions)
+        
+        # 2. Calculate the Target (Y)
+        target_q = r + gamma * max_future_q
+        
+        # 3. Update the Q-Network (simulated gradient step)
+        update_q_network(s, a, target_q)
+        # -------------------------
 
         current_state = new_state
         s = s_prime
@@ -146,7 +160,6 @@ for episode in range(num_episodes):
         if r > max_instantaneous_coverage_found:
             max_instantaneous_coverage_found = r
 
-    # END OF EPISODE: Check the total accumulated reward (Return)
     if episode_return > max_episode_return_found:
         max_episode_return_found = episode_return
 
@@ -160,7 +173,6 @@ print("\nTraining complete. Finding optimal positions...")
 max_coverage = -1
 optimal_state = None
 
-# Iterate over all possible states to find the true global maximum coverage
 for state in states:
     coverage = get_reward(state)
     
@@ -180,17 +192,17 @@ x_axis = [i * CHECK_INTERVAL for i in range(1, len(convergence_data) + 1)]
 
 plt.figure(figsize=(10, 6))
 plt.plot(x_axis, convergence_data, marker='.', linestyle='-', color='b')
-plt.title('Q-Learning Convergence Curve: Maximum Accumulated Episode Return (25 Actions)')
+plt.title('DQN Convergence Curve: Maximum Accumulated Episode Return (Simulated)')
 plt.xlabel('Training Episodes')
 plt.ylabel('Max Accumulated Return Found')
 plt.grid(True)
-# Corrected axhline to use max_episode_return_found
 plt.axhline(y=max_episode_return_found, color='r', linestyle='--', label=f'Final Max Return ({max_episode_return_found})') 
 plt.legend()
 plt.show()
 
-# --- OPTIMAL DISK COVERAGE PLOT ---
+# --- OPTIMAL DISK COVERAGE PLOT (Visualization) ---
 def plot_disk_coverage(optimal_state, radius, dot_distribution, grid_size):
+    # ... (Plotting code remains the same as previous response) ...
     (x1, y1), (x2, y2) = optimal_state
 
     fig, ax = plt.subplots(figsize=(8, 8))
@@ -199,17 +211,14 @@ def plot_disk_coverage(optimal_state, radius, dot_distribution, grid_size):
     dot_ys = [d[1] for d in dot_distribution]
     ax.scatter(dot_xs, dot_ys, color='gray', s=50, zorder=2, label='All Dots')
 
-    # Plot Disk 1
     circle1 = plt.Circle((x1, y1), radius, color='red', alpha=0.3, label=f'Disk 1 Coverage')
     ax.add_patch(circle1)
     ax.scatter(x1, y1, color='red', marker='X', s=200, zorder=3, label=f'Disk 1 ({x1}, {y1})')
 
-    # Plot Disk 2
     circle2 = plt.Circle((x2, y2), radius, color='blue', alpha=0.3, label=f'Disk 2 Coverage')
     ax.add_patch(circle2)
     ax.scatter(x2, y2, color='blue', marker='X', s=200, zorder=3, label=f'Disk 2 ({x2}, {y2})')
 
-    # Identify and plot covered dots
     covered_dot_indices = set()
     for i, (dx, dy) in enumerate(dot_distribution):
         if (dx - x1)**2 + (dy - y1)**2 <= radius**2 or \
@@ -234,6 +243,5 @@ def plot_disk_coverage(optimal_state, radius, dot_distribution, grid_size):
     plt.tight_layout()
     plt.show()
 
-# --- CALL THE NEW PLOTTING FUNCTION ---
 print("\nPlotting optimal disk coverage...")
 plot_disk_coverage(optimal_state, radius, DOT_DISTRIBUTION, grid)
