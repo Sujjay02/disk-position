@@ -1,5 +1,7 @@
 import numpy as np
 import random
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import math
 from collections import deque
@@ -309,7 +311,8 @@ axes[1].set_ylabel('Average Loss')
 axes[1].grid(True)
 
 plt.tight_layout()
-plt.show()
+plt.savefig('convergence.png', dpi=150)
+print("Saved convergence plot to convergence.png")
 
 # --- OPTIMAL DISK COVERAGE PLOT ---
 def plot_disk_coverage(optimal_state, radius, dot_distribution, grid_size):
@@ -350,7 +353,8 @@ def plot_disk_coverage(optimal_state, radius, dot_distribution, grid_size):
     ax.set_aspect('equal', adjustable='box')
     ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
     plt.tight_layout()
-    plt.show()
+    plt.savefig('disk_coverage.png', dpi=150)
+    print("Saved disk coverage plot to disk_coverage.png")
 
 print("\nPlotting optimal disk coverage...")
 plot_disk_coverage(optimal_state, radius, DOT_DISTRIBUTION, grid)
