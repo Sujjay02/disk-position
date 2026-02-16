@@ -74,25 +74,23 @@ print(f"Using device: {device}")
 # --- NEURAL NETWORK DEFINITION ---
 class DQN(nn.Module):
     """
-    Deep Q-Network with 3 hidden layers.
+    Deep Q-Network with 2 hidden layers.
     Input: State vector [x1, y1, x2, y2] (normalized)
     Output: Q-values for all 25 actions
     """
-    def __init__(self, state_size=4, action_size=25, hidden_sizes=[128, 128, 64]):
+    def __init__(self, state_size=4, action_size=25, hidden_sizes=[128, 128]):
         super(DQN, self).__init__()
 
         self.fc1 = nn.Linear(state_size, hidden_sizes[0])   # Input -> Hidden 1 (128 nodes)
         self.fc2 = nn.Linear(hidden_sizes[0], hidden_sizes[1])  # Hidden 1 -> Hidden 2 (128 nodes)
-        self.fc3 = nn.Linear(hidden_sizes[1], hidden_sizes[2])  # Hidden 2 -> Hidden 3 (64 nodes)
-        self.fc4 = nn.Linear(hidden_sizes[2], action_size)  # Hidden 3 -> Output (25 actions)
+        self.fc3 = nn.Linear(hidden_sizes[1], action_size)  # Hidden 2 -> Output (25 actions)
 
         self.relu = nn.ReLU()
 
     def forward(self, x):
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
-        x = self.relu(self.fc3(x))
-        return self.fc4(x)  # No activation on output (Q-values can be any real number)
+        return self.fc3(x)  # No activation on output (Q-values can be any real number)
 
 # --- EXPERIENCE REPLAY BUFFER ---
 class ReplayBuffer:
@@ -195,7 +193,6 @@ print(f"\nNetwork Architecture:")
 print(f"  Input Layer:    4 nodes (x1, y1, x2, y2 normalized)")
 print(f"  Hidden Layer 1: 128 nodes (ReLU)")
 print(f"  Hidden Layer 2: 128 nodes (ReLU)")
-print(f"  Hidden Layer 3: 64 nodes (ReLU)")
 print(f"  Output Layer:   25 nodes (Q-values for each action)")
 print(f"\nTotal Parameters: {sum(p.numel() for p in policy_net.parameters()):,}")
 print("="*60 + "\n")
@@ -204,7 +201,7 @@ convergence_data = []
 loss_data = []
 max_instantaneous_coverage_found = -1
 max_episode_return_found = -float('inf')
-CHECK_INTERVAL = 100
+CHECK_INTERVAL = 50
 
 epsilon = epsilon_start
 
