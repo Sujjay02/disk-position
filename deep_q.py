@@ -146,7 +146,7 @@ target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()  # Target network is not trained directly
 
 optimizer = optim.Adam(policy_net.parameters(), lr=alpha)
-loss_fn = nn.MSELoss()
+loss_fn = nn.SmoothL1Loss()  # Huber loss - more stable than MSE for DQN
 memory = ReplayBuffer(MEMORY_SIZE)
 
 def choose_action(state, epsilon):
@@ -199,10 +199,8 @@ print(f"  Output Layer:   25 nodes (Q-values for each action)")
 print(f"\nTotal Parameters: {sum(p.numel() for p in policy_net.parameters()):,}")
 print("="*60 + "\n")
 
-convergence_data = []
-loss_data = []
-max_instantaneous_coverage_found = -1
-max_episode_return_found = -float('inf')
+all_episode_returns = []  # Per-episode return for every episode
+all_episode_losses = []   # Per-episode avg loss for every episode
 CHECK_INTERVAL = 50
 
 epsilon = epsilon_start
@@ -238,10 +236,6 @@ for episode in range(num_episodes):
             loss_count += 1
 
         episode_return += reward
-
-        if reward > max_instantaneous_coverage_found:
-            max_instantaneous_coverage_found = reward
-
         current_state = next_state
 
     # Decay epsilon
@@ -251,15 +245,15 @@ for episode in range(num_episodes):
     if (episode + 1) % TARGET_UPDATE_FREQ == 0:
         target_net.load_state_dict(policy_net.state_dict())
 
-    if episode_return > max_episode_return_found:
-        max_episode_return_found = episode_return
+    # Track every episode
+    all_episode_returns.append(episode_return)
+    avg_loss = episode_loss / loss_count if loss_count > 0 else 0
+    all_episode_losses.append(avg_loss)
 
     if (episode + 1) % CHECK_INTERVAL == 0:
-        convergence_data.append(max_episode_return_found)
-        avg_loss = episode_loss / loss_count if loss_count > 0 else 0
-        loss_data.append(avg_loss)
-        print(f"Episode {episode + 1}: Max Coverage = {max_instantaneous_coverage_found}, "
-              f"Max Return = {max_episode_return_found}, Epsilon = {epsilon:.3f}, Avg Loss = {avg_loss:.4f}")
+        recent_avg = np.mean(all_episode_returns[-CHECK_INTERVAL:])
+        print(f"Episode {episode + 1}: Avg Return (last {CHECK_INTERVAL}) = {recent_avg:.1f}, "
+              f"Epsilon = {epsilon:.3f}, Avg Loss = {avg_loss:.4f}")
 
 # --- FINDING THE OPTIMAL SOLUTION USING TRAINED NETWORK ---
 print("\nTraining complete. Finding optimal positions using trained network...")
@@ -292,23 +286,31 @@ print(f"Optimal Position for Disk 2 (x, y): {optimal_state[1]}")
 print("\nPlotting convergence curves...")
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# Plot 1: Episode Returns
-x_axis = [i * CHECK_INTERVAL for i in range(1, len(convergence_data) + 1)]
-axes[0].plot(x_axis, convergence_data, marker='.', linestyle='-', color='b')
-axes[0].set_title('DQN Convergence: Maximum Episode Return')
-axes[0].set_xlabel('Training Episodes')
-axes[0].set_ylabel('Max Accumulated Return')
+# Compute moving average
+window = 50
+moving_avg = np.convolve(all_episode_returns, np.ones(window)/window, mode='valid')
+
+# Plot 1: Episodic Return (every episode + moving average)
+episodes = np.arange(1, num_episodes + 1)
+axes[0].plot(episodes, all_episode_returns, alpha=0.3, color='b', label='Per Episode')
+axes[0].plot(np.arange(window, num_episodes + 1), moving_avg, color='r', linewidth=2,
+             label=f'Moving Avg ({window} eps)')
+axes[0].set_title('DQN Convergence: Episodic Return')
+axes[0].set_xlabel('Episode')
+axes[0].set_ylabel('Episodic Return')
 axes[0].grid(True)
-axes[0].axhline(y=max_episode_return_found, color='r', linestyle='--',
-                label=f'Final Max Return ({max_episode_return_found})')
 axes[0].legend()
 
 # Plot 2: Training Loss
-axes[1].plot(x_axis, loss_data, marker='.', linestyle='-', color='orange')
+axes[1].plot(episodes, all_episode_losses, alpha=0.3, color='orange', label='Per Episode')
+loss_moving_avg = np.convolve(all_episode_losses, np.ones(window)/window, mode='valid')
+axes[1].plot(np.arange(window, num_episodes + 1), loss_moving_avg, color='red', linewidth=2,
+             label=f'Moving Avg ({window} eps)')
 axes[1].set_title('DQN Training Loss')
-axes[1].set_xlabel('Training Episodes')
+axes[1].set_xlabel('Episode')
 axes[1].set_ylabel('Average Loss')
 axes[1].grid(True)
+axes[1].legend()
 
 plt.tight_layout()
 plt.savefig('convergence.png', dpi=150)
